@@ -1,0 +1,29 @@
+program : stmt_list
+stmt_list : stmt stmt_list
+stmt_list : EPSILON
+stmt : matched_stmt
+stmt : unmatched_stmt
+unmatched_stmt : IF expr COLON NEWLINE elif_block
+unmatched_stmt : other_stmt
+matched_stmt : IF expr COLON NEWLINE elif_block 
+elif_block : elif_clause elif_block
+elif_block : EPSILON
+elif_clause : ELIF expr COLON NEWLINE other_stmt
+other_stmt : assn_stmt
+other_stmt : print_stmt
+other_stmt : input_stmt
+expr : IDENTIFIER relop IDENTIFIER
+expr : IDENTIFIER relop LITERAL
+relop : LESSTHAN
+relop : GREATERTHAN
+relop : EQUALTO
+assn_stmt : IDENTIFIER ASSIGN list
+assn_stmt : IDENTIFIER ASSIGN literal
+assn_stmt : IDENTIFIER ASSIGN IDENTIFIER
+list : LEFTSQUARE list_ele RIGHTSQUARE
+list_ele : literal COMMA list_ele
+list_ele : list COMMA list_ele
+list_ele : EPSILON
+literal : INTEGER
+literal : FLOAT
+literal : STRING
