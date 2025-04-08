@@ -14,6 +14,9 @@ struct Token {
     }
 };
 
+stack<int> indentLevels;
+
+
 struct Lexer{
 	// Contains a set of valid keywords for the python like language 
 
@@ -21,7 +24,11 @@ struct Lexer{
 	set<string> keywords; 
 	vector<Token> allTokens;
 
+	// Contains a list of pairs of regex and the token type it recognizes
+	// Map not used to successfully match the regex in proper order specified during initialization
+	vector<pair<regex, string>> tokenPatterns;
 
+	
 	Lexer(const string &fileName){
 		this->fileName = string(fileName);
 
@@ -49,9 +56,7 @@ struct Lexer{
 		    {punctuatorRegex, "PUNCTUATOR"}
 		};
 	}
-	// Contains a list of pairs of regex and the token type it recognizes
-	// Map not used to successfully match the regex in proper order specified during initialization
-	vector<pair<regex, string>> tokenPatterns;
+
 
 	//function to classify if the identifier regex identified a keyword or a regex
 	string classifyKeywordOrIdentifier(const string&);
@@ -119,32 +124,65 @@ vector<Token> Lexer::tokenizeCurrentLine(string& line, int rowNum) {
 
 
 void Lexer::runLexer(void){
-	ifstream file(fileName);
+    ifstream file(fileName);
 
     if (!file.is_open()) {
-        cerr << "Failed to open" << fileName << endl;
+        cerr << "Failed to open " << fileName << endl;
         exit(1);
     }
 
     string line;
     int rowNum = 0;
-	allTokens.resize(0);
+    allTokens.clear();
+    indentLevels = stack<int>(); // clear the stack
+    indentLevels.push(0); // start with base indentation level 0
 
     while (getline(file, line)) {
+        int actualIndent = 0;
+        for (char c : line) {
+            if (c == ' ') actualIndent++;
+            else if (c == '\t') actualIndent += 4; // assuming a tab = 4 spaces
+            else break;
+        }
+
+        string trimmed = line;
+        trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+
+        if (trimmed.empty() || trimmed[0] == '#') {
+            rowNum++;
+            continue; // skip empty or comment-only lines
+        }
+
+        if (actualIndent > indentLevels.top()) {
+            indentLevels.push(actualIndent);
+            allTokens.push_back({"\\t", "INDENT", rowNum, 0});
+        } else if (actualIndent < indentLevels.top()) {
+            while (!indentLevels.empty() && actualIndent < indentLevels.top()) {
+                indentLevels.pop();
+                allTokens.push_back({"\\b", "DEDENT", rowNum, 0});
+            }
+            if (actualIndent != indentLevels.top()) {
+                cerr << "Indentation error at line " << rowNum << endl;
+                exit(1);
+            }
+        }
+
         vector<Token> tokens = tokenizeCurrentLine(line, rowNum);
         allTokens.insert(allTokens.end(), tokens.begin(), tokens.end());
-        string leftTrimmedString = line;
-        leftTrimmedString.erase(0, leftTrimmedString.find_first_not_of(" \t"));
-        if (!leftTrimmedString.empty() && leftTrimmedString[0] != '#') {
-            allTokens.push_back({"\\n", "NEWLINE", rowNum, (int)(line.length())});
-        }
-    
+
+        allTokens.push_back({"\\n", "NEWLINE", rowNum, (int)(line.length())});
         rowNum++;
     }
 
-    file.close();
+    // At EOF, flush remaining indent levels
+    while (indentLevels.size() > 1) {
+        indentLevels.pop();
+        allTokens.push_back({"\\b", "DEDENT", rowNum, 0});
+    }
 
+    file.close();
 }
+
 
 void Lexer::printLexer(void){
 	 for (auto token : allTokens) cout << "<" << token.lexeme << ", " << token.type  << ", row: " << token.rowNum << ", col: " << token.colNum << ">" << endl;

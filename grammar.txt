@@ -1,29 +1,33 @@
 program : stmt_list
-stmt_list : stmt stmt_list
+stmt_list : stmt stmt_list  
 stmt_list : EPSILON
-stmt : matched_stmt
+stmt : matched_stmt  
 stmt : unmatched_stmt
-unmatched_stmt : IF expr COLON NEWLINE elif_block
+unmatched_stmt : IF expr COLON NEWLINE INDENT elif_block DEDENT  
 unmatched_stmt : other_stmt
-matched_stmt : IF expr COLON NEWLINE elif_block 
-elif_block : elif_clause elif_block
+matched_stmt : IF expr COLON NEWLINE INDENT elif_block DEDENT
+elif_block : elif_clause elif_block  
 elif_block : EPSILON
-elif_clause : ELIF expr COLON NEWLINE other_stmt
-other_stmt : assn_stmt
-other_stmt : print_stmt
+elif_clause : ELIF expr COLON NEWLINE INDENT other_stmt DEDENT
+other_stmt : assn_stmt  
+other_stmt : print_stmt  
 other_stmt : input_stmt
-expr : IDENTIFIER relop IDENTIFIER
+print_stmt : PRINT LEFTPAREN IDENTIFIER RIGHTPAREN
+print_stmt : PRINT LEFTPAREN literal RIGHTPAREN
+input_stmt : INPUT LEFTPAREN IDENTIFIER RIGHTPAREN
+input_stmt : INPUT LEFTPAREN literal RIGHTPAREN
+expr : IDENTIFIER relop IDENTIFIER  
 expr : IDENTIFIER relop LITERAL
-relop : LESSTHAN
-relop : GREATERTHAN
+relop : LESSTHAN  
+relop : GREATERTHAN  
 relop : EQUALTO
-assn_stmt : IDENTIFIER ASSIGN list
-assn_stmt : IDENTIFIER ASSIGN literal
+assn_stmt : IDENTIFIER ASSIGN list  
+assn_stmt : IDENTIFIER ASSIGN literal  
 assn_stmt : IDENTIFIER ASSIGN IDENTIFIER
 list : LEFTSQUARE list_ele RIGHTSQUARE
-list_ele : literal COMMA list_ele
-list_ele : list COMMA list_ele
+list_ele : literal COMMA list_ele  
+list_ele : list COMMA list_ele  
 list_ele : EPSILON
-literal : INTEGER
-literal : FLOAT
+literal : INTEGER  
+literal : FLOAT  
 literal : STRING

@@ -32,39 +32,46 @@ struct CFG{
 		srcFile = fileName;
 		ifstream fptr(srcFile);
 		string line;
+	
+		vector<pair<string, vector<string>>> rawProductions;
+	
 		while(getline(fptr, line)){
-			if(line == "") continue;
+			if(line.empty()) continue;
+	
 			stringstream ss(line);
 			string s1, s2;
-			// contains lefthand side of production
-			getline(ss,s1, ':');
+			getline(ss, s1, ':');
 			s1 = trim(s1);
 			nonTerminals.insert(s1);
-			// contains righthand side of production
+	
 			getline(ss, s2, '\n');
 			s2 = trim(s2);	
 			stringstream ss2(s2);
 			string temp;
 			vector<string> arr;
+	
 			while(ss2 >> temp){
 				if(isUpper(temp)) terminals.insert(temp);
 				else nonTerminals.insert(temp);
 				arr.push_back(temp);
 			}
-			production.push_back({s1, arr});
-			
+			rawProductions.push_back({s1, arr});
 		}
-		follow["program"] = "$";
-// 		for(auto ele : production){
-// 			cout << ele.first << "->" ;
-// 			for(auto str : ele.second) cout << str << " ";
-// 			cout << endl;
-// 		}		
-// 
-// 		for(auto it : terminals){
-// 			cout << it << " ";
-// 		}
-// 		cout << endl;
+	
+		// Augment the grammar
+		string originalStart = rawProductions[0].first;
+		vector<string> augmentedRHS = {originalStart};
+	
+		production.push_back({"S'", augmentedRHS});
+		nonTerminals.insert("S'");
+	
+		// Copy the rest of the productions
+		for (auto &p : rawProductions) {
+			production.push_back(p);
+		}
+	
+		// Initialize FOLLOW set of augmented start symbol with $
+		follow["S'"].insert("$");
 	}
 
 	bool isTerminal(const string &s){
@@ -77,34 +84,110 @@ struct CFG{
 		return false;
 	}
 
-	void findFirst(const string &s){
-		if(first.find(s) != first.end()) return;
-		for(auto p : production){
-			if(p.first != s) continue;
-			// now check if
-			// 1. production has EPSILON
-			if((p.second).size() == 1 && (p.second).front() == "EPSILON" ){
-				first[s].insert("EPSILON");
-				continue;
-			}
-			// 2. if the production starts with a non terminal
-			if(isTerminal((p.second).front())){
-				first[s].insert((p.second).front());
-				continue;
-			}
-			else{
-				int epsilonCnt = 0;
-				for(int i =0; i < (p.second).size() ; i++){
-					// check if follow is already computed or not
-					bool foundEpsilon = false;
-					string str = (p.second)[i];
-					if(isTerminal(str)) {
-						first[s].insert((p.second)[i]);
-						break;
-					}
-					
-				}
-			}
-		}
+	void computeAllFirsts() {
+	    for (const string &nt : nonTerminals) {
+	        findFirst(nt);
+	    }
 	}
+
+	void computeAllFollows() {
+	    for (const string &nt : nonTerminals) {
+	        findFollow(nt);
+	    }
+	}
+
+	void findFirst(const string &s) {
+	    if (first.find(s) != first.end()) return;
+	
+	    for (auto &p : production) {
+	        if (p.first != s) continue;
+	
+	        const vector<string> &rhs = p.second;
+	
+	        // Case 1: EPSILON production
+	        if (rhs.size() == 1 && rhs.front() == "EPSILON") {
+	            first[s].insert("EPSILON");
+	            continue;
+	        }
+	
+	        // Case 2: Go through each symbol in RHS
+	        bool allNullable = true;
+	
+	        for (size_t i = 0; i < rhs.size(); ++i) {
+	            string symbol = rhs[i];
+	
+	            if (isTerminal(symbol)) {
+	                first[s].insert(symbol);
+	                allNullable = false;
+	                break;
+	            }
+	
+	            // Recursively find FIRST for non-terminal
+	            findFirst(symbol);
+	
+	            // Add FIRST(symbol) - EPSILON to FIRST(s)
+	            for (const string &f : first[symbol]) {
+	                if (f != "EPSILON") {
+	                    first[s].insert(f);
+	                }
+	            }
+	
+	            // If EPSILON not in FIRST(symbol), stop
+	            if (first[symbol].find("EPSILON") == first[symbol].end()) {
+	                allNullable = false;
+	                break;
+	            }
+	        }
+	
+	        // If all symbols in RHS could derive EPSILON, add EPSILON
+	        if (allNullable) {
+	            first[s].insert("EPSILON");
+	        }
+	    }
+	}
+	void findFollow(const string &s) {
+	    if (follow.find(s) != follow.end() && !follow[s].empty()) return;
+	
+	    for (auto &p : production) {
+	        const string &lhs = p.first;
+	        const vector<string> &rhs = p.second;
+	
+	        for (int i = 0; i < rhs.size(); ++i) {
+	            if (rhs[i] != s) continue;
+	
+	            // Case: A → α B β
+	            if (i + 1 < rhs.size()) {
+	                string nextSymbol = rhs[i + 1];
+	
+	                // Case 1: next is terminal
+	                if (isTerminal(nextSymbol)) {
+	                    follow[s].insert(nextSymbol);
+	                }
+	                // Case 2: next is non-terminal
+	                else if (isNonTerminal(nextSymbol)) {
+	                    findFirst(nextSymbol);
+	                    for (const string &f : first[nextSymbol]) {
+	                        if (f != "EPSILON")
+	                            follow[s].insert(f);
+	                    }
+	
+	                    // If EPSILON is in FIRST(next), add FOLLOW(lhs)
+	                    if (first[nextSymbol].count("EPSILON")) {
+	                        findFollow(lhs);
+	                        follow[s].insert(follow[lhs].begin(), follow[lhs].end());
+	                    }
+	                }
+	            }
+	            // Case: A → α B (B is at end)
+	            else {
+	                if (lhs != s) {
+	                    findFollow(lhs);
+	                    follow[s].insert(follow[lhs].begin(), follow[lhs].end());
+	                }
+	            }
+	        }
+	    }
+	}
+	
+	
 };
