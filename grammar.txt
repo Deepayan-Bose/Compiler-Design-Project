@@ -8,7 +8,7 @@ unmatched_stmt : other_stmt
 matched_stmt : IF expr COLON NEWLINE INDENT elif_block DEDENT
 elif_block : elif_clause elif_block  
 elif_block : EPSILON
-elif_clause : ELIF expr COLON NEWLINE INDENT other_stmt DEDENT
+elif_clause : ELIF expr COLON NEWLINE INDENT stmt DEDENT
 other_stmt : assn_stmt  
 other_stmt : print_stmt  
 other_stmt : input_stmt

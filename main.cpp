@@ -8,34 +8,51 @@
 int main(){
 	Lexer lexer("test.py");
 	lexer.runLexer();
-	lexer.printLexer();
-
+	// lexer.printLexer();
+	vector<Token> tokens = lexer.allTokens;
+	
 	cout << "---------------------------------\n";
 	
 	CFG grammar("grammar.txt");
 	grammar.computeAllFirsts();
 	grammar.computeAllFollows();
-	
-// 	for (auto &entry : grammar.follow) {
-// 	    cout << "FOLLOW(" << entry.first << ") = { ";
-// 	    for (const string &val : entry.second) {
-// 	        cout << val << " ";
-// 	    }
-// 	    cout << "}" << endl;
-// 	}
-// 
-// 	for(auto &entry : grammar.first){
-// 		 cout << "FIRST(" << entry.first << ") = { ";
-// 	    for (const string &val : entry.second) {
-// 	        cout << val << " ";
-// 	    }
-// 	    cout << "}" << endl;
-// 	}
-// 
-// 	cout << "---------------------------------\n";
+	// cout << "TERMINALS : ";
+	// for(auto it : grammar.terminals){
+	// 	cout << it << " ";
+	// }
+	// cout << endl;
+	// cout << "---------------------------------\n";
+	// cout << "NONTERMINALS : ";
+	// for(auto it : grammar.nonTerminals){
+	// 	if(it == "S'") continue;
+	// 	cout << it << " ";
+	// }
+	// cout << endl;
+	for (auto &entry : grammar.follow) {
+		if(entry.first == "S'") continue;
+	    cout << "FOLLOW(" << entry.first << ") = { ";
+	    for (const string &val : entry.second) {
+	        cout << val << " ";
+	    }
+	    cout << "}" << endl;
+	}
+
+	cout << "---------------------------------\n";
+
+
+	for(auto &entry : grammar.first){
+		if(entry.first == "S'") continue;
+		 cout << "FIRST(" << entry.first << ") = { ";
+	    for (const string &val : entry.second) {
+	        cout << val << " ";
+	    }
+	    cout << "}" << endl;
+	}
+
+	cout << "---------------------------------\n";
 	
 
 
-	// vector<DFA_State> dfa_states = canonicalCollection(grammar);
-	// printDFAStates(dfa_states);
+	vector<DFA_State> dfa_states = buildCanonicalCollection(grammar);
+	//printDFAStates(dfa_states);
 }

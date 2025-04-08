@@ -1,22 +1,24 @@
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <set>
+#include <iostream>
+
+using namespace std;
+
 struct Item {
     string lhs;
     vector<string> rhs;
     int dotPos;
-    string lookahead; // important for CLR(1)
-
-	// used to check if two Items are equal or not : useful for storing items in a set
+    string lookahead;
 
     bool operator==(const Item &other) const {
-    	if(dotPos != other.dotPos) return false;
-        if(lhs != other.lhs) return false;
-        if(rhs.size() != other.rhs.size()) return false;
-        for(int i= 0; i < min(rhs.size(), other.rhs.size()); i++) if(rhs[i] != other.rhs[i]) return false;
-        if(lookahead != other.lookahead) return false;
-
-        return true;
+        if (lhs != other.lhs) return false;
+        if (rhs != other.rhs) return false;
+        if (dotPos != other.dotPos) return false;
+        return lookahead == other.lookahead;
     }
 
-	// for ordering of items in the set
     bool operator<(const Item &other) const {
         if (lhs != other.lhs) return lhs < other.lhs;
         if (rhs != other.rhs) return rhs < other.rhs;
@@ -27,19 +29,21 @@ struct Item {
     string toString() const {
         string result = lhs + " → ";
         for (int i = 0; i <= rhs.size(); ++i) {
-            if (i == dotPos) result += "• ";
+            if (i == dotPos) result += "•";
             if (i < rhs.size()) result += rhs[i] + " ";
         }
         result += ", " + lookahead;
         return result;
     }
-
-    void initItem(string lhs, vector<string> rhs, int dotPos, string lookahead){
-    	this->lhs = lhs;
-    	this->rhs = rhs;
-    	this->dotPos = dotPos;
-    	this->lookahead = lookahead;
-    }
+    void initItem(const string LHS,
+                   const vector<string> RHS,
+                   int dot,
+                   const string LA) {
+         lhs       = LHS;
+         rhs       = RHS;
+         dotPos    = dot;
+         lookahead = LA;
+     }
 };
 
 struct ItemSet {
@@ -49,12 +53,6 @@ struct ItemSet {
         return items == other.items;
     }
 
-	ItemSet(const ItemSet & other) {
-		for(auto it : other.items) items.insert(it);
-	}
-	ItemSet(){
-		
-	}
     string toString() const {
         string res = "{\n";
         for (const auto &item : items) {
@@ -64,12 +62,6 @@ struct ItemSet {
         return res;
     }
 
-    bool operator<(const ItemSet &other) const {
-	
-    	return items.size() < other.items.size();
-    	
-    }
-
     void addItem(const Item &item) {
         items.insert(item);
     }
@@ -77,177 +69,214 @@ struct ItemSet {
     bool contains(const Item &item) const {
         return items.find(item) != items.end();
     }
+     bool operator<(const ItemSet &other) const {
+        return items < other.items;
+    }
+};
+
+struct DFA_State {
+    int id;
+    ItemSet items;
+    unordered_map<string, int> transitions;  // Symbol -> next state ID
+    bool isAccepting;  // True if this state contains S' → program•
+
+    // Constructor
+    DFA_State(int id, const ItemSet& items) : id(id), items(items) {
+        // Check if this is an accepting state (contains S' → program•, $)
+        isAccepting = false;
+        for (const Item& item : items.items) {
+            if (item.lhs == "S'" && 
+                item.rhs.size() == 1 && 
+                item.rhs[0] == "program" && 
+                item.dotPos == 1 && 
+                item.lookahead == "$") {
+                isAccepting = true;
+                break;
+            }
+        }
+    }
+
+    // For printing the state
+    string toString() const {
+        string result = "State " + to_string(id) + ":\n";
+        result += (isAccepting ? "[ACCEPTING]\n" : "");
+        
+        // Print all items
+        for (const Item& item : items.items) {
+            result += "  " + item.toString() + "\n";
+        }
+
+        // Print transitions
+        if (!transitions.empty()) {
+            result += "  Transitions:\n";
+            for (const auto& trans : transitions) {
+                result += "    " + trans.first + " → State " + to_string(trans.second) + "\n";
+            }
+        }
+
+        return result;
+    }
+
+    // For comparing states (used in stateMap)
+    bool operator==(const DFA_State& other) const {
+        return items == other.items;
+    }
 };
 
 set<string> computeFirstFromSeq(vector<string> sequence, CFG &grammar) {
     set<string> ans;
-    bool epsilonTillEnd = true;
+    bool allEpsilon = true;
 
     for (const auto& symbol : sequence) {
-
-        // Terminal
         if (grammar.isTerminal(symbol)) {
-            if (symbol != "EPSILON")
+            if (symbol != "EPSILON") {
                 ans.insert(symbol);
-            epsilonTillEnd = false;
-            //break; WRONG- PLZ DEBUG
+            }
+            allEpsilon = false;
+            break; // Stop at first terminal (unless EPSILON)
         }
 
-        // Non-terminal: get FIRST set
         const set<string>& firstSet = grammar.first[symbol];
+        for (const string& tok : firstSet) {
+            if (tok != "EPSILON") ans.insert(tok);
+        }
 
-        // Add all except EPSILON
-        for (const string& tok : firstSet)
-            if (tok != "EPSILON")
-                ans.insert(tok);
-
-        // If EPSILON not in FIRST(Xi), stop
         if (firstSet.find("EPSILON") == firstSet.end()) {
-            epsilonTillEnd = false;
+            allEpsilon = false;
             break;
         }
     }
 
-    if (epsilonTillEnd)
-        ans.insert("EPSILON");
-
+    if (allEpsilon) ans.insert("EPSILON");
+    
     return ans;
 }
 
+ItemSet computeClosure(const ItemSet &inputSet, CFG &grammar) {
 
-ItemSet computeClosure(ItemSet a, CFG &grammar) {
-    ItemSet closureSet;
-    queue<Item> q;
+    ItemSet closureSet = inputSet;
+    queue<Item> workQ;
 
-    // Add initial items to closure and queue
-    for (const Item& it : a.items) {
-        closureSet.addItem(it);
-        q.push(it);
+    for (const Item &it : inputSet.items) {
+        workQ.push(it);
     }
+	
+    while (!workQ.empty()) {
+        Item curr = workQ.front();
+        workQ.pop();
 
-    while (!q.empty()) {
-        Item curr = q.front(); q.pop();
-
-        if (curr.dotPos >= curr.rhs.size()) continue;
+        if (curr.dotPos >= curr.rhs.size()) 
+            continue;
 
         string B = curr.rhs[curr.dotPos];
-        if (!grammar.isNonTerminal(B)) continue;
+        if (!grammar.isNonTerminal(B)) 
+            continue;
 
-        // Compute FIRST(βa)
         vector<string> beta;
-        for (int i = curr.dotPos + 1; i < curr.rhs.size(); i++)
+        for (int i = curr.dotPos + 1; i < curr.rhs.size(); ++i) {
             beta.push_back(curr.rhs[i]);
+        }
         beta.push_back(curr.lookahead);
 
+        // Computing first
         set<string> lookaheads = computeFirstFromSeq(beta, grammar);
 		if(lookaheads.empty()) lookaheads.insert("$");
-        for (const auto& prod : grammar.production) {
-            if (prod.first == B) {
-                for (const string& la : lookaheads) {
-                    Item newItem;
-                    newItem.initItem(B, prod.second, 0, la);
-                    if (!closureSet.contains(newItem)) {
-                        closureSet.addItem(newItem);
-                        q.push(newItem);
-                    }
+
+        for (const auto &prod : grammar.production) {
+            if (prod.first != B) 
+                continue;
+
+            for (const string &la : lookaheads) {
+                Item newItem;
+                newItem.lhs       = B;
+                newItem.rhs       = prod.second;
+                newItem.dotPos    = 0;
+                newItem.lookahead = la;
+
+                if (!closureSet.contains(newItem)) {
+                    closureSet.addItem(newItem);
+                    workQ.push(newItem);
                 }
             }
         }
     }
 
-    cout << "CLOSURE SET : " << closureSet.toString() << endl;
-
     return closureSet;
 }
 
+
 ItemSet GOTO(ItemSet I, const string &X, CFG &grammar) {
     ItemSet J;
-
     for (const Item &item : I.items) {
-        // Check if dot is before X
         if (item.dotPos < item.rhs.size() && item.rhs[item.dotPos] == X) {
-            // Create a new item with dot moved one step ahead
             Item newItem = item;
             newItem.dotPos++;
             J.addItem(newItem);
         }
     }
-
-    // Compute closure of the result
     return computeClosure(J, grammar);
 }
 
-struct DFA_State {
-    int id;
-    ItemSet items;
-    unordered_map<string, int> transitions; // symbol -> next state ID
-
-    DFA_State(int id, const ItemSet& items) {
-        this->id = id;
-        this->items = items;
-    }
-
-    // For comparing two states based on their items
-    bool operator==(const DFA_State &other) const {
-        return items == other.items;
-    }
-};
-
-vector<DFA_State> canonicalCollection(CFG &grammar) {
+vector<DFA_State> buildCanonicalCollection(CFG &grammar) {
     vector<DFA_State> states;
-    map<ItemSet, int> stateMap; // maps ItemSet to state ID for uniqueness
-    queue<ItemSet> q;
+    map<ItemSet, int> stateMap;    // ItemSet → state ID
+    queue<ItemSet> workQueue;
 
-    // Augmented start production: S' -> •S, $
-    string startSym = "program"; // assuming "program" is start symbol
+    // 1) Create the initial item S' → • program, $
     Item startItem;
-    startItem.initItem("S'", {startSym}, 0, "$");
+    startItem.lhs       = "S'";
+    startItem.rhs       = {"program"};
+    startItem.dotPos    = 0;
+    startItem.lookahead = "$";
 
     ItemSet startSet;
     startSet.addItem(startItem);
     startSet = computeClosure(startSet, grammar);
 
-    // Add first state
+    // 2) Create initial DFA_State
     states.emplace_back(0, startSet);
     stateMap[startSet] = 0;
-    q.push(startSet);
+    workQueue.push(startSet);
 
-    int stateCounter = 1;
+    // 3) Process queue
+    while (!workQueue.empty()) {
+        ItemSet currentSet = workQueue.front(); 
+        workQueue.pop();
 
-    while (!q.empty()) {
-        ItemSet current = q.front(); q.pop();
-        int currentStateID = stateMap[current];
+        int currID = stateMap[currentSet];
+        DFA_State &currState = states[currID];
 
+        // 4) Gather all symbols X that appear immediately after a dot
         set<string> symbols;
-        // Collect all grammar symbols after dot
-        for (const Item &item : current.items) {
-            if (item.dotPos < item.rhs.size()) {
-                symbols.insert(item.rhs[item.dotPos]);
+        for (const Item &it : currentSet.items) {
+            if (it.dotPos < it.rhs.size()) {
+                symbols.insert(it.rhs[it.dotPos]);
             }
         }
 
-        for (const string &symbol : symbols) {
-            ItemSet gotoSet = GOTO(current, symbol, grammar);
+        // 5) For each symbol, compute GOTO
+        for (const string &X : symbols) {
+            ItemSet gotoSet = GOTO(currentSet, X, grammar);
             if (gotoSet.items.empty()) continue;
-			cout << "ITEMSET : " << gotoSet.toString() << endl;
-            if (stateMap.find(gotoSet) == stateMap.end()) {
-                // New state
-                stateMap[gotoSet] = stateCounter;
-                states.emplace_back(stateCounter, gotoSet);
-                q.push(gotoSet);
-                states[currentStateID].transitions[symbol] = stateCounter;
-                stateCounter++;
-            } else {
-                // Already exists
-                states[currentStateID].transitions[symbol] = stateMap[gotoSet];
+
+            // 6) If new, assign ID and enqueue
+            if (!stateMap.count(gotoSet)) {
+                int newID = states.size();
+                states.emplace_back(newID, gotoSet);
+                stateMap[gotoSet] = newID;
+                workQueue.push(gotoSet);
             }
+
+            // 7) Record transition
+            int targetID = stateMap[gotoSet];
+            currState.transitions[X] = targetID;
         }
     }
 
     return states;
 }
 
-void printDFAStates(const vector<DFA_State> &states) {
+void printDFAStates(const vector<DFA_State> states) {
     for (const DFA_State &state : states) {
         cout << "State " << state.id << ":\n";
 
