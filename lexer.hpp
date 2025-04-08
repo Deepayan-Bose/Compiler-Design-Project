@@ -36,7 +36,7 @@ struct Lexer{
 		  	"if", "else", "elif", "int", "bool", "float", "list", "str",
 		};
 		
-		regex stringLiteralRegex(R"('([^'\\]|\\.)')");
+		regex stringLiteralRegex(R"('([^'\\]|\\.)*')");
 		regex floatLiteralRegex(R"(\b\d+\.\d+\b)");
 		regex intLiteralRegex(R"(\b\d+\b)");
 		regex boolLiteralRegex(R"(\bTrue\b|\bFalse\b)");
