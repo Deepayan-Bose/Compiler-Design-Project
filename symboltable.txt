@@ -1,0 +1,5 @@
+Symbol Table:
+<print, IDENTIFIER, row: 4, col: 0>
+<b, IDENTIFIER, row: 3, col: 0>
+<a, IDENTIFIER, row: 2, col: 0>
+<c, IDENTIFIER, row: 1, col: 0>

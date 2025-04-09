@@ -1,7 +1,7 @@
 #include <bits/stdc++.h>
 
 #include "lexer.hpp"
-
+#include "symbolTable.hpp"
 #include "CFG.hpp"
 #include "parser.hpp"
 
@@ -16,6 +16,15 @@ int main(){
 	CFG grammar("grammar.txt");
 	grammar.computeAllFirsts();
 	grammar.computeAllFollows();
+	SymbolTable symTable;
+	
+	for (const Token& tok : lexer.allTokens) {
+	    if (tok.type == "IDENTIFIER") {
+	        symTable.addSymbol(tok);  // Only add identifiers
+	    }
+	
+	}
+	symTable.writeToFile("symboltable.txt");
 	// cout << "TERMINALS : ";
 	// for(auto it : grammar.terminals){
 	// 	cout << it << " ";

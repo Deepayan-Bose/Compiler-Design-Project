@@ -5,7 +5,8 @@ stmt : matched_stmt
 stmt : unmatched_stmt
 unmatched_stmt : IF expr COLON NEWLINE INDENT elif_block DEDENT  
 unmatched_stmt : other_stmt
-matched_stmt : IF expr COLON NEWLINE INDENT elif_block DEDENT
+matched_stmt : IF expr COLON NEWLINE INDENT elif_block else_clause DEDENT
+else_clause : ELSE COLON NEWLINE statment
 elif_block : elif_clause elif_block  
 elif_block : EPSILON
 elif_clause : ELIF expr COLON NEWLINE INDENT stmt DEDENT
